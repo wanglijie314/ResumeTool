@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "简历一键填",
+  "short_name": "JianliAutoFill",
+  "version": "0.1.0",
+  "description": "识别招聘网站表单字段，自动填写已有简历信息；遇到未知字段询问用户并记忆，下次自动识别填写。",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "简历一键填：扫描并填写 / 管理信息副本",
+    "default_popup": "src/popup/index.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/index.ts"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "src/options/index.html"
+}

@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>演示页 · 模拟某公司招聘申请表</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        font-family: 'Microsoft YaHei', -apple-system, sans-serif;
+        background: #f3f6fb; margin: 0; color: #26303e;
+      }
+      .shell { max-width: 760px; margin: 24px auto; background: #fff; border-radius: 12px;
+        padding: 28px 34px; box-shadow: 0 2px 12px rgba(30, 60, 120, 0.08); }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      .sub { color: #7b8794; font-size: 13px; margin-bottom: 22px; }
+      .step { font-size: 12px; color: #2563eb; background: #eaf1ff; border-radius: 999px;
+        padding: 2px 10px; display: inline-block; margin-bottom: 14px; }
+      .form-item { margin-bottom: 16px; }
+      .form-item > label, .form-item > .lbl { display: block; font-size: 14px; margin-bottom: 6px; color: #333; }
+      .req::after { content: ' *'; color: #e11d48; }
+      input[type='text'], input[type='tel'], input[type='email'], input[type='date'],
+      select, textarea {
+        width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px;
+        font-size: 14px; font-family: inherit;
+      }
+      textarea { min-height: 74px; resize: vertical; }
+      .row { display: flex; gap: 14px; }
+      .row > div { flex: 1; }
+      .radios { display: flex; gap: 18px; padding-top: 6px; font-size: 14px; }
+      .btn { margin-top: 18px; background: #1d4ed8; color: #fff; border: none;
+        border-radius: 8px; padding: 10px 22px; font-size: 14px; cursor: pointer; }
+      .btn.ghost { background: #e2e8f0; color: #334155; margin-left: 10px; }
+      .hidden-step { display: none; margin-top: 26px; border-top: 1px dashed #cbd5e1;
+        padding-top: 20px; }
+      .hint { font-size: 12px; color: #7b8794; }
+      /* 自定义控件演示样式 */
+      .cwrap { position: relative; }
+      .cwrap input.c-input { cursor: pointer; background: #fff; }
+      .dropdown-list, .calendar-pop {
+        position: absolute; top: calc(100% + 2px); left: 0; z-index: 50;
+        background: #fff; border: 1px solid #cbd5e1; border-radius: 8px;
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.14); min-width: 100%;
+      }
+      .dropdown-list { max-height: 180px; overflow-y: auto; }
+      .c-opt { padding: 6px 10px; font-size: 13px; cursor: pointer; }
+      .c-opt:hover { background: #eef2ff; }
+      .cal-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; }
+      .cal-title { font-size: 13px; font-weight: 600; }
+      .cal-btn { border: none; background: transparent; cursor: pointer; font-size: 15px; color: #1d4ed8; }
+      .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 4px 8px 8px; }
+      .cal-blank { height: 24px; }
+      .day-cell {
+        height: 24px; display: flex; align-items: center; justify-content: center;
+        font-size: 12px; cursor: pointer; border-radius: 4px;
+      }
+      .day-cell:hover { background: #1d4ed8; color: #fff; }
+      /* 多行组合演示 */
+      .exp-sec { border: 1px dashed #94a3b8; border-radius: 10px; padding: 10px 12px; margin: 12px 0; }
+      .exp-title { font-weight: 700; margin-bottom: 8px; }
+      .exp-row { display: flex; flex-wrap: wrap; gap: 8px 12px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; background: #fafcff; }
+      .er-item { display: flex; flex-direction: column; gap: 3px; min-width: 120px; flex: 1 0 150px; }
+      .er-label { font-size: 12px; color: #475569; }
+      .er-input { font-size: 13px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-family: inherit; width: 100%; }
+      .exp-rows textarea.er-input { min-height: 52px; resize: vertical; }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <h1>某科技有限公司 · 校园招聘申请</h1>
+      <div class="sub">演示页面：模拟公司自建招聘网站的表单结构（含下一步动态渲染）</div>
+      <div class="step">第 1 步 / 基本信息</div>
+
+      <div class="form-item">
+        <label class="lbl req" for="f-name">姓名</label>
+        <input id="f-name" name="name" placeholder="请输入姓名" />
+      </div>
+
+      <div class="form-item">
+        <div class="lbl req">性别</div>
+        <div class="radios">
+          <label><input type="radio" name="gender" value="M" /> 男</label>
+          <label><input type="radio" name="gender" value="F" /> 女</label>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="form-item">
+          <label for="f-mobile">手机号码</label>
+          <input id="f-mobile" name="mobile" type="tel" maxlength="11" placeholder="11 位手机号" />
+        </div>
+        <div class="form-item">
+          <label for="f-email">电子邮箱</label>
+          <input id="f-email" name="email" type="email" placeholder="you@example.com" />
+        </div>
+      </div>
+
+      <div class="form-item">
+        <label for="f-idcard">身份证号码</label>
+        <input id="f-idcard" name="idcard" placeholder="18 位身份证号" />
+      </div>
+
+      <div class="form-item">
+        <label for="f-birth">出生日期</label>
+        <input id="f-birth" name="birth" type="date" />
+      </div>
+
+      <div class="step">第 2 步 / 教育信息</div>
+      <div class="row">
+        <div class="form-item">
+          <label for="f-school">毕业院校</label>
+          <select id="f-school" name="school">
+            <option value="">请选择学校</option>
+            <option>清华大学</option>
+            <option>北京大学</option>
+            <option>上海交通大学</option>
+            <option>其他</option>
+          </select>
+        </div>
+        <div class="form-item">
+          <label for="f-degree">最高学历</label>
+          <select id="f-degree" name="degree">
+            <option value="">请选择</option>
+            <option>本科</option>
+            <option>硕士</option>
+            <option>博士</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-item">
+        <label for="f-major">所学专业</label>
+        <input id="f-major" name="major" placeholder="请输入专业" />
+      </div>
+      <div class="row">
+        <div class="form-item">
+          <label for="f-graduation">毕业时间</label>
+          <input id="f-graduation" name="graduation" type="text" placeholder="如 2026-07" />
+        </div>
+        <div class="form-item">
+          <label for="f-cet6">英语六级成绩</label>
+          <input id="f-cet6" name="cet6" placeholder="如 530" />
+        </div>
+      </div>
+
+      <div class="step">第 3 步 / 经历与意向</div>
+      <div class="form-item">
+        <label for="f-project">项目经历</label>
+        <textarea id="f-project" name="project" placeholder="请简述 1~2 个代表性项目…"></textarea>
+      </div>
+      <div class="form-item">
+        <label for="f-intern">实习经历</label>
+        <textarea id="f-intern" name="intern" placeholder="实习单位、岗位、时间与收获…"></textarea>
+      </div>
+      <div class="form-item">
+        <label for="f-selfeval">自我评价</label>
+        <textarea id="f-selfeval" name="selfeval"></textarea>
+      </div>
+      <div class="row">
+        <div class="form-item">
+          <label for="f-city">期望工作地点</label>
+          <input id="f-city" name="expect_city" placeholder="如：北京/上海" />
+        </div>
+        <div class="form-item">
+          <label for="f-referral">内推码</label>
+          <input id="f-referral" name="referral" placeholder="有则填写" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="form-item">
+          <label for="f-idtype">证件类型</label>
+          <select id="f-idtype" name="id_type">
+            <option value="">请选择</option>
+            <option>身份证</option>
+            <option>护照</option>
+            <option>港澳通行证</option>
+          </select>
+        </div>
+        <div class="form-item">
+          <label for="f-homephone">家庭电话</label>
+          <input id="f-homephone" name="home_phone" type="tel" placeholder="区号-号码" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="form-item">
+          <label for="f-faculty">院系</label>
+          <input id="f-faculty" name="faculty" placeholder="如：信息科学技术学院" />
+        </div>
+        <div class="form-item">
+          <label for="f-studyyears">学制</label>
+          <input id="f-studyyears" name="study_years" placeholder="如：4 年" />
+        </div>
+      </div>
+      <div class="form-item">
+        <label for="f-rank">成绩排名（班级内）</label>
+        <input id="f-rank" name="class_rank" placeholder="如：前 10%" />
+      </div>
+
+      <!-- 自定义控件演示：只读下拉 + 自定义日历（用于验证“分策略填写”） -->
+      <div class="step">控件形态演示（只读自定义控件）</div>
+      <div class="row">
+        <div class="form-item">
+          <div class="lbl req">民族</div>
+          <div class="cwrap" data-combo>
+            <input type="text" readonly class="c-input" placeholder="请选择民族" />
+            <div class="dropdown-list" hidden>
+              <div class="c-opt" role="option">汉族</div>
+              <div class="c-opt" role="option">壮族</div>
+              <div class="c-opt" role="option">回族</div>
+              <div class="c-opt" role="option">满族</div>
+              <div class="c-opt" role="option">维吾尔族</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-item">
+          <label for="w-date-grad">毕业时间（自定义日历）</label>
+          <div class="cwrap" data-calendar>
+            <input type="text" readonly id="w-date-grad" class="c-input" placeholder="请选择日期" />
+            <div class="calendar-pop" hidden></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-item">
+        <div class="lbl">到岗时间（自定义日历）</div>
+        <div class="cwrap" data-calendar>
+          <input type="text" readonly class="c-input" placeholder="请选择日期" />
+          <div class="calendar-pop" hidden></div>
+        </div>
+      </div>
+
+      <!-- 多行组合演示：项目经历（可“添加一行”，验证按段增行填写） -->
+      <div class="step">多行组合演示 · 项目经历（＋添加一行）</div>
+      <div class="exp-sec" id="exp-proj">
+        <div class="exp-title">项目经历</div>
+        <div class="exp-rows" id="proj-rows">
+          <div class="exp-row">
+            <div class="er-item"><label class="er-label">项目名称</label><input class="er-input" type="text" /></div>
+            <div class="er-item"><label class="er-label">项目职责</label><textarea class="er-input"></textarea></div>
+            <div class="er-item"><label class="er-label">项目描述</label><textarea class="er-input"></textarea></div>
+            <div class="er-item"><label class="er-label">开始时间</label><input class="er-input" type="text" placeholder="如 2021.03" /></div>
+            <div class="er-item"><label class="er-label">结束时间</label><input class="er-input" type="text" placeholder="如 2021.08" /></div>
+          </div>
+        </div>
+        <button class="btn ghost" id="proj-add" type="button">＋ 添加一行</button>
+      </div>
+
+      <!-- 多行组合演示：实习经历（只有一行、无添加按钮，验证“只填第一段+提醒”） -->
+      <div class="step">多行组合演示 · 实习经历（只有一行）</div>
+      <div class="exp-sec" id="exp-intern">
+        <div class="exp-title">实习经历</div>
+        <div class="exp-rows">
+          <div class="exp-row">
+            <div class="er-item"><label class="er-label">开始时间</label><input class="er-input" type="text" placeholder="如 2020.07" /></div>
+            <div class="er-item"><label class="er-label">结束时间</label><input class="er-input" type="text" placeholder="如 2020.12" /></div>
+            <div class="er-item"><label class="er-label">企业名称</label><input class="er-input" type="text" /></div>
+            <div class="er-item"><label class="er-label">职位名称</label><input class="er-input" type="text" /></div>
+            <div class="er-item"><label class="er-label">工作描述</label><textarea class="er-input"></textarea></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 一个"从未见过的字段"：用于演示 M3 询问与记忆 -->
+      <div class="form-item">
+        <label for="f-staffno">工号（若你是内部员工）</label>
+        <input id="f-staffno" name="staff_no" placeholder="选填" />
+      </div>
+      <!-- 合并型字段：识别器应提示需要拆分 -->
+      <div class="form-item">
+        <label for="f-cetall">外语成绩（四六级合填）</label>
+        <textarea id="f-cetall" name="lang"></textarea>
+      </div>
+      <!-- 应被忽略的控件 -->
+      <div class="form-item">
+        <label for="f-captcha">图形验证码</label>
+        <input id="f-captcha" name="captcha" placeholder="输入右侧字符" />
+      </div>
+
+      <button class="btn" id="btn-next">保存并进入下一步</button>
+      <button class="btn ghost" id="btn-reset" type="button">重置填写</button>
+      <div class="hint">点击“下一步”会动态渲染更多字段，用来验证识别面板的“自动跟随”。</div>
+
+      <div class="hidden-step" id="step2">
+        <div class="step">第 4 步 / 补充信息（动态出现）</div>
+        <div class="form-item">
+          <label for="f-hukou">户口所在地</label>
+          <input id="f-hukou" name="hukou" placeholder="省 / 市" />
+        </div>
+        <div class="row">
+          <div class="form-item">
+            <label for="f-avail">可到岗时间</label>
+            <select id="f-avail" name="available">
+              <option value="">请选择</option>
+              <option>随时到岗</option>
+              <option>一个月内</option>
+              <option>毕业后到岗</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label for="f-channel">招聘信息来源</label>
+            <input id="f-channel" name="channel" placeholder="如：官网/内推/宣讲会" />
+          </div>
+        </div>
+        <div class="form-item">
+          <label for="f-award">获奖经历</label>
+          <textarea id="f-award" name="award"></textarea>
+        </div>
+      </div>
+    </div>
+    <script>
+      const step2 = document.getElementById('step2');
+      document.getElementById('btn-next').addEventListener('click', () => {
+        step2.style.display = 'block';
+        document.getElementById('btn-next').textContent = '已展开补充信息（识别面板应自动刷新）';
+      });
+      document.getElementById('btn-reset').addEventListener('click', () => {
+        for (const el of document.querySelectorAll('input, select, textarea')) el.value = '';
+        step2.style.display = 'none';
+        document.querySelector('.step').scrollIntoView({ behavior: 'smooth' });
+      });
+
+      // —— 演示自定义控件行为（readonly 输入框 + 点击展开下拉/日历）——
+      document.querySelectorAll('[data-combo]').forEach((wrap) => {
+        const input = wrap.querySelector('input');
+        const list = wrap.querySelector('.dropdown-list');
+        const setOpen = (v) => { list.hidden = !v; };
+        input.addEventListener('click', () => setOpen(list.hidden));
+        list.addEventListener('click', (e) => {
+          const opt = e.target.closest('.c-opt');
+          if (opt) {
+            input.value = opt.textContent.trim();
+            setOpen(false);
+          }
+        });
+        document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) setOpen(false); });
+      });
+
+      function buildCalendar(pop, onPick) {
+        const now = new Date();
+        let ym = { y: now.getFullYear(), m: now.getMonth() + 1 };
+        const render = () => {
+          const head = document.createElement('div');
+          head.className = 'cal-head';
+          const prev = document.createElement('button');
+          prev.type = 'button';
+          prev.className = 'cal-btn';
+          prev.textContent = '‹';
+          const title = document.createElement('span');
+          title.className = 'cal-title';
+          title.textContent = `${ym.y}年${ym.m}月`;
+          const next = document.createElement('button');
+          next.type = 'button';
+          next.className = 'cal-btn';
+          next.textContent = '›';
+          head.append(prev, title, next);
+          const grid = document.createElement('div');
+          grid.className = 'cal-grid';
+          const lead = new Date(ym.y, ym.m - 1, 1).getDay();
+          const days = new Date(ym.y, ym.m, 0).getDate();
+          for (let i = 0; i < lead; i++) {
+            const b = document.createElement('span');
+            b.className = 'cal-blank';
+            grid.appendChild(b);
+          }
+          for (let d = 1; d <= days; d++) {
+            const c = document.createElement('div');
+            c.className = 'day-cell';
+            c.textContent = String(d);
+            c.title = `${ym.y}-${String(ym.m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            c.addEventListener('click', () =>
+              onPick(`${ym.y}-${String(ym.m).padStart(2, '0')}-${String(d).padStart(2, '0')}`),
+            );
+            grid.appendChild(c);
+          }
+          pop.textContent = '';
+          pop.append(head, grid);
+          prev.addEventListener('click', (e) => {
+            e.stopPropagation();
+            ym = ym.m === 1 ? { y: ym.y - 1, m: 12 } : { y: ym.y, m: ym.m - 1 };
+            render();
+          });
+          next.addEventListener('click', (e) => {
+            e.stopPropagation();
+            ym = ym.m === 12 ? { y: ym.y + 1, m: 1 } : { y: ym.y, m: ym.m + 1 };
+            render();
+          });
+        };
+        render();
+        return { refresh: () => { if (!pop.hidden) render(); } };
+      }
+
+      document.querySelectorAll('[data-calendar]').forEach((wrap) => {
+        const input = wrap.querySelector('input');
+        const pop = wrap.querySelector('.calendar-pop');
+        const cal = buildCalendar(pop, (val) => {
+          input.value = val;
+          pop.hidden = true;
+        });
+        input.addEventListener('click', () => {
+          pop.hidden = !pop.hidden;
+          if (!pop.hidden) cal.refresh();
+        });
+        document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) pop.hidden = true; });
+      });
+
+      // 项目经历：添加一行（复制首行空模板）
+      document.getElementById('proj-add').addEventListener('click', () => {
+        const rows = document.getElementById('proj-rows');
+        const tpl = rows.querySelector('.exp-row');
+        if (!tpl) return;
+        const clone = tpl.cloneNode(true);
+        for (const el of clone.querySelectorAll('input, textarea')) el.value = '';
+        rows.appendChild(clone);
+      });
+    </script>
+  </body>
+</html>

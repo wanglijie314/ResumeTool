@@ -1,0 +1,29 @@
+{
+  "name": "jianli-autofill",
+  "version": "0.1.0",
+  "private": true,
+  "description": "简历一键填（Jianli AutoFill）—— 招聘网站简历表单自动填写助手（Chrome/Edge MV3 扩展）：识别表单字段、按默认信息副本自动填写；未识别字段引导新增自定义字段并全局记住；多副本信息管理与本地简历(.pdf/.docx/.txt)解析；教学浮层、经历多行组合填写、运行日志等。数据全程仅存本地。",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/fix-sw-loader.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:classify": "tsx scripts/classify-test.ts",
+    "test:keys": "tsx scripts/keys-test.ts && tsx scripts/textmatch-test.ts",
+    "test:rows": "tsx scripts/rowroles-test.ts",
+    "test:resume": "tsx scripts/resume-test.ts && tsx scripts/docx-test.ts",
+    "check": "npm run typecheck && npm run test:classify && npm run test:keys && npm run test:resume && npm run build"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.7.1",
+    "@types/chrome": "*",
+    "tsx": "^4.23.13",
+    "typescript": "~5.9.0",
+    "vite": "^8.2.2",
+    "vite-plugin-static-copy": "^4.1.1"
+  },
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "pdfjs-dist": "^6.3.289"
+  }
+}

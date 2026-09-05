@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>简历一键填 · 管理</title>
+    <script type="module" src="./main.ts"></script>
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="logo">简</span>
+        <div>
+          <h1>简历一键填</h1>
+          <p>招聘网站表单字段识别与自动填写 · 开发预览 v0.2.0</p>
+        </div>
+      </div>
+      <nav class="tabs" id="tabs">
+        <button data-page="profile" class="active">我的档案</button>
+        <button data-page="rules">学习规则 <em>M3</em></button>
+        <button data-page="logs">运行日志</button>
+        <button data-page="preview">字段体系</button>
+        <button data-page="about">关于与隐私</button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="stats" id="stats">
+        <div class="stat"><b id="stat-copies">–</b><span>信息副本</span></div>
+        <div class="stat"><b id="stat-entries">–</b><span>档案条目</span></div>
+        <div class="stat"><b id="stat-rules">–</b><span>已学规则</span></div>
+      </section>
+
+      <!-- 我的档案：多副本管理 -->
+      <section class="page" data-page="profile">
+        <div class="copies-layout">
+          <aside class="copies-side">
+            <h3>信息副本</h3>
+            <ul id="copies-list" class="copies-list"></ul>
+            <div class="copies-actions">
+              <button id="btn-copy-new" class="mini" type="button">＋ 新建副本</button>
+              <button id="btn-import-resume" class="mini" type="button">📄 上传简历解析…</button>
+              <input
+                id="file-resume"
+                type="file"
+                accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                hidden
+              />
+            </div>
+            <p class="copies-hint">
+              打勾的为<b>默认副本</b>，用于工具栏「扫描并填写」。
+              各副本互相独立：页面里补充的信息只写入默认副本，不影响其它副本。
+            </p>
+          </aside>
+          <div class="copy-editor">
+            <div class="editor-head" id="editor-head">（未选择副本）</div>
+            <div class="editor-toolbar">
+              <button id="btn-entry-add" class="mini" type="button">＋ 添加字段</button>
+              <button id="btn-editor-save" class="save" type="button">保存本副本</button>
+              <span id="editor-status" class="log-hint"></span>
+            </div>
+            <div id="entry-rows" class="entry-rows"></div>
+
+            <div class="custom-editor">
+              <div class="custom-head">
+                <b>自定义字段</b>
+                <span class="log-hint">可自行新增“名称+值”，如 居住城市 → 北京（同样可被教学/识别填写）</span>
+                <button id="btn-custom-add" class="mini" type="button">＋ 添加自定义字段</button>
+              </div>
+              <div id="custom-rows" class="entry-rows"></div>
+              <div id="custom-empty" class="entry-empty">还没有自定义字段。</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 简历导入：解析结果预览 -->
+        <div id="import-panel" class="import-panel" hidden>
+          <h3>解析结果预览 <span id="import-name" class="log-count"></span></h3>
+          <div id="import-status" class="import-status"></div>
+          <div id="import-rows" class="import-rows"></div>
+          <div id="import-blocks-wrap" hidden>
+            <div class="import-sep">结构化经历拆解（可编辑：公司/时间/部门/描述…）</div>
+            <div id="import-blocks" class="import-blocks"></div>
+          </div>
+          <div class="import-actions">
+            <button id="btn-import-add" class="mini" type="button">＋ 添加字段</button>
+            <span style="flex:1"></span>
+            <button id="btn-import-new" class="save" type="button">另存为新副本</button>
+            <button id="btn-import-merge" class="mini" type="button">合并到当前副本</button>
+            <button id="btn-import-cancel" class="mini" type="button">取消</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" data-page="rules" style="display: none">
+        <h3>词表管理 <span class="log-count" id="words-count"></span></h3>
+        <p class="log-hint">
+          “页面文本 → 标准字段”的全局词表，跨站点生效。教学浮层里点「就是这个字段」会记一条
+          <em>教学</em>；下面手动登记的是 <em>别名</em>（同义词，例：页面叫“本科院校”，字段选“毕业院校”，
+          之后两种叫法都能识别）。
+        </p>
+        <div class="alias-add">
+          <select id="alias-field"></select>
+          <input id="alias-text" type="text" placeholder="输入页面上的叫法，如：本科院校" />
+          <button id="btn-alias-add" class="mini" type="button">登记别名</button>
+        </div>
+        <div id="words-list" class="words-list"></div>
+
+        <h3 style="margin-top: 18px">站点忽略 <span class="log-count" id="ignores-count"></span></h3>
+        <p class="log-hint">只在对应站点生效的“不再提示/忽略”记录（教学浮层里选「本站忽略」产生）。</p>
+        <div id="ignores-list" class="words-list"></div>
+      </section>
+
+      <section class="page" data-page="logs" style="display: none">
+        <h3>运行日志 <span class="log-count" id="logs-count"></span></h3>
+        <p class="log-hint">
+          每次页面内容脚本启动 = 一个会话（按时间命名）。保留最近 20 个会话，
+          事件超过 1 天自动清理；日志同步打印到浏览器控制台。
+        </p>
+        <div class="log-bar">
+          <button id="btn-log-refresh" class="mini" type="button">刷新</button>
+          <button id="btn-log-export" class="mini" type="button">导出为 .txt</button>
+          <button id="btn-log-clear" class="mini danger" type="button">清空日志</button>
+        </div>
+        <div id="logs-list" class="logs-list"></div>
+      </section>
+
+      <section class="page" data-page="preview" style="display: none">
+        <h3>字段体系（内置识别词典可覆盖的类型）</h3>
+        <div id="taxonomy-groups" class="groups"></div>
+      </section>
+
+      <section class="page" data-page="about" style="display: none">
+        <h3>关于与隐私</h3>
+        <ul class="about">
+          <li>所有数据（档案副本、学习规则、设置、日志）仅保存在本机浏览器的 chrome.storage.local，不会上传任何服务器。</li>
+          <li>敏感字段（如身份证号 🔒）填写前由你在弹窗中确认内容后才会写入页面。</li>
+          <li>内容脚本只在你访问的页面内读取表单控件描述，不收集浏览历史。</li>
+          <li>当前里程碑：M0 骨架 ✅ · M1 扫描识别 ✅ · M2 多副本档案 + 弹窗填写 ✅（进行中）· M3 教学/询问待开发。</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>简历一键填 · 仅本地数据处理 · 手动加载的开发版扩展</footer>
+  </body>
+</html>
