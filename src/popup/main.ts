@@ -22,7 +22,7 @@ import { customKeyOfName, customNameOfKey, isCustomKey } from '../shared/keys';
 import { SENSITIVE_KEYS, fieldZh } from '../shared/taxonomy';
 import type { FieldKey } from '../shared/taxonomy';
 import { hasAiConfig } from '../shared/aiProvider';
-import { setAiStatus } from '../shared/aiSuggestions';
+import { listAiSuggestions, setAiStatus } from '../shared/aiSuggestions';
 import { upsertWord } from '../shared/learning';
 import { loadSettings } from '../shared/storage';
 import type {
@@ -385,6 +385,7 @@ async function refreshFill(): Promise<void> {
   if (copy) {
     renderFillRows(s, copy);
     renderRowPlanUI(copy);
+    await renderPendingAiSuggestions();
   }
 }
 
@@ -473,6 +474,12 @@ async function doAiAnalyze(): Promise<void> {
     kind: f.kind,
     widget: f.widget,
   }));
+  // 等待可能较久（模型排队可达 1~2 分钟），每秒提示已等待时长，避免误以为卡死
+  const t0 = Date.now();
+  const tick = window.setInterval(() => {
+    const sec = Math.round((Date.now() - t0) / 1000);
+    setMsg(`AI 分析中…已等待 ${sec} 秒（该模型可能较慢，请勿关闭弹窗；建议完成后会显示在下方）`);
+  }, 1000);
   setMsg('AI 分析中（仅发送控件标签/提示词/形态，不发送你填的值）…');
   try {
     const resp = (await chrome.runtime.sendMessage({
@@ -491,8 +498,12 @@ async function doAiAnalyze(): Promise<void> {
     renderAiSuggestions(suggestions);
     setMsg(`AI 给出 ${suggestions.length} 条建议（建议级：接受后才会写入词表并自动识别；不接受不生效）。`);
   } catch (e) {
-    setMsg(`AI 请求出错：${e instanceof Error ? e.message : String(e)}`, true);
+    setMsg(
+      `AI 请求中断：${e instanceof Error ? e.message : String(e)}。若后台其实已完成，建议会已保存——重新打开本弹窗会自动显示，无需重复点击。`,
+      true,
+    );
   } finally {
+    window.clearInterval(tick);
     btn.disabled = false;
   }
 }
@@ -558,6 +569,31 @@ function renderAiSuggestions(suggestions: AiSuggestion[]): void {
     wrap.appendChild(item);
   }
   box.appendChild(wrap);
+}
+
+/** 重开弹窗时，自动捞回“后台已完成但尚未处理”的 AI 建议（只显示匹配当前未识别字段的） */
+async function renderPendingAiSuggestions(): Promise<void> {
+  try {
+    const pending = await listAiSuggestions('pending');
+    if (pending.length === 0) return;
+    const texts = new Set(
+      teachFields.map((f) => f.labelText || f.placeholder || f.name).filter(Boolean),
+    );
+    if (texts.size === 0) return;
+    const seen = new Set<string>();
+    const mine = pending.filter((s) => {
+      if (s.kind !== 'page-field' || !s.pageText || seen.has(s.pageText)) return false;
+      if (!texts.has(s.pageText)) return false;
+      seen.add(s.pageText);
+      return true;
+    });
+    if (mine.length > 0) {
+      renderAiSuggestions(mine);
+      setMsg(`检测到 ${mine.length} 条来自上次 AI 分析的建议（后台已完成）。可接受或忽略。`);
+    }
+  } catch {
+    /* 建议加载失败不影响主流程 */
+  }
 }
 
 // ---------- 信息副本管理 ----------
