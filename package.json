@@ -11,8 +11,9 @@
     "test:classify": "tsx scripts/classify-test.ts",
     "test:keys": "tsx scripts/keys-test.ts && tsx scripts/textmatch-test.ts",
     "test:rows": "tsx scripts/rowroles-test.ts",
+    "test:ai": "tsx scripts/ai-test.ts && tsx scripts/resume-ai-test.ts",
     "test:resume": "tsx scripts/resume-test.ts && tsx scripts/docx-test.ts",
-    "check": "npm run typecheck && npm run test:classify && npm run test:keys && npm run test:resume && npm run build"
+    "check": "npm run typecheck && npm run test:classify && npm run test:keys && npm run test:rows && npm run test:ai && npm run test:resume && npm run build"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.7.1",

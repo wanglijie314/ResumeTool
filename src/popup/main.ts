@@ -18,10 +18,20 @@ import {
   upsertEntry,
   valueMapOf,
 } from '../shared/profile';
-import { customNameOfKey, isCustomKey } from '../shared/keys';
+import { customKeyOfName, customNameOfKey, isCustomKey } from '../shared/keys';
 import { SENSITIVE_KEYS, fieldZh } from '../shared/taxonomy';
 import type { FieldKey } from '../shared/taxonomy';
-import type { FillReport, ProfileCopy, SnapshotData, SnapshotField } from '../shared/types';
+import { hasAiConfig } from '../shared/aiProvider';
+import { setAiStatus } from '../shared/aiSuggestions';
+import { upsertWord } from '../shared/learning';
+import { loadSettings } from '../shared/storage';
+import type {
+  AiSuggestion,
+  FillReport,
+  ProfileCopy,
+  SnapshotData,
+  SnapshotField,
+} from '../shared/types';
 
 /** 字段键展示名：自定义键还原为用户起的名字 */
 export function fieldLabel(key: string): string {
@@ -40,6 +50,7 @@ const $ = <T extends HTMLElement>(id: string): T => {
 let activeTabId: number | null = null;
 let lastSnapshot: SnapshotData | null = null;
 let lastCopy: ProfileCopy | undefined;
+let aiReady = false;
 
 async function getActiveTabId(): Promise<number | null> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -140,6 +151,9 @@ function renderFillRows(snapshot: SnapshotData, copy: ProfileCopy): void {
   const teachBtn = $<HTMLButtonElement>('btn-teach');
   teachBtn.hidden = teachFields.length === 0;
   teachBtn.textContent = `教学 ${teachFields.length} 个未识别…`;
+  const aiBtn = $<HTMLButtonElement>('btn-ai');
+  aiBtn.hidden = !(aiReady && teachFields.length > 0);
+  aiBtn.textContent = `AI 识别 ${teachFields.length} 个未识别…`;
   const fillBtn = $<HTMLButtonElement>('btn-fill');
   fillBtn.disabled = recognizedKeys.length === 0;
   $('bar-fill').hidden = false;
@@ -312,6 +326,11 @@ async function doFill(): Promise<void> {
 async function refreshFill(): Promise<void> {
   const status = $<HTMLSpanElement>('fill-status');
   setMsg('');
+  try {
+    aiReady = hasAiConfig(await loadSettings());
+  } catch {
+    aiReady = false;
+  }
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const tabId = tab?.id ?? null;
   const url = tab?.url ?? '';
@@ -439,6 +458,108 @@ async function doFillRows(): Promise<void> {
   }
 }
 
+/** AI：把未识别字段一次性交给 page-match 技能分析（只发结构信息） */
+async function doAiAnalyze(): Promise<void> {
+  const btn = $<HTMLButtonElement>('btn-ai');
+  if (teachFields.length === 0) {
+    setMsg('当前没有可让 AI 分析的未识别字段', true);
+    return;
+  }
+  btn.disabled = true;
+  const payload = teachFields.map((f) => ({
+    labelText: f.labelText,
+    placeholder: f.placeholder,
+    name: f.name,
+    kind: f.kind,
+    widget: f.widget,
+  }));
+  setMsg('AI 分析中（仅发送控件标签/提示词/形态，不发送你填的值）…');
+  try {
+    const resp = (await chrome.runtime.sendMessage({
+      type: 'AI_ANALYZE',
+      fields: payload,
+    })) as { ok?: boolean; error?: string; suggestions?: AiSuggestion[] };
+    if (!resp?.ok) {
+      setMsg(`AI 分析失败：${resp?.error ?? '无响应'}`, true);
+      return;
+    }
+    const suggestions = resp.suggestions ?? [];
+    if (suggestions.length === 0) {
+      setMsg('AI 未给出可用建议（可能都选择跳过，或模型不可用）', true);
+      return;
+    }
+    renderAiSuggestions(suggestions);
+    setMsg(`AI 给出 ${suggestions.length} 条建议（建议级：接受后才会写入词表并自动识别；不接受不生效）。`);
+  } catch (e) {
+    setMsg(`AI 请求出错：${e instanceof Error ? e.message : String(e)}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function sugTarget(s: AiSuggestion): string {
+  return s.fieldKey ?? (s.newFieldName ? customKeyOfName(s.newFieldName) : '');
+}
+
+function sugTitle(s: AiSuggestion): string {
+  if (s.fieldKey) return fieldLabel(s.fieldKey);
+  return s.newFieldName ? `新增「${s.newFieldName}」` : '未知';
+}
+
+/** 把 AI 建议渲染到页面下方（建议级，接受/忽略） */
+function renderAiSuggestions(suggestions: AiSuggestion[]): void {
+  const box = $<HTMLDivElement>('rows');
+  document.getElementById('ai-sug')?.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'ai-sug';
+  for (const s of suggestions) {
+    const item = document.createElement('div');
+    item.className = 'copy-item';
+    const head = document.createElement('div');
+    head.className = 'row-head';
+    const dot = document.createElement('span');
+    dot.className = 'dot low';
+    const name = document.createElement('span');
+    name.className = 'fname';
+    name.textContent = `“${s.pageText}”`;
+    const tag = document.createElement('span');
+    tag.className = 'tag low';
+    tag.textContent = `AI·${Math.round((s.conf ?? 0.8) * 100)}%`;
+    head.append(dot, name, tag);
+    const to = document.createElement('div');
+    to.className = 'hintline';
+    to.textContent = `建议 → ${sugTitle(s)}`;
+    const acts = document.createElement('div');
+    acts.className = 'copy-actions';
+    const bOk = document.createElement('button');
+    bOk.className = 'mini';
+    bOk.textContent = '✓ 接受并记住';
+    bOk.addEventListener('click', async () => {
+      const target = sugTarget(s);
+      if (!target) {
+        setMsg('该建议缺少数值目标', true);
+        return;
+      }
+      await upsertWord(s.pageText, target, 'taught');
+      await setAiStatus(s.id, 'accepted').catch(() => undefined);
+      setMsg(`已接受：以后“${s.pageText}”自动识别为 ${fieldLabel(target)}`);
+      await refreshFill();
+    });
+    const bNo = document.createElement('button');
+    bNo.className = 'mini';
+    bNo.textContent = '✗ 忽略';
+    bNo.addEventListener('click', async () => {
+      await setAiStatus(s.id, 'ignored').catch(() => undefined);
+      item.remove();
+      if (!wrap.querySelector('.copy-item')) wrap.remove();
+    });
+    acts.append(bOk, bNo);
+    item.append(head, to, acts);
+    wrap.appendChild(item);
+  }
+  box.appendChild(wrap);
+}
+
 // ---------- 信息副本管理 ----------
 
 function renderCopies(copies: ProfileCopy[]): void {
@@ -559,6 +680,9 @@ async function main(): Promise<void> {
   });
   $<HTMLButtonElement>('btn-fill-rows').addEventListener('click', () => {
     void doFillRows();
+  });
+  $<HTMLButtonElement>('btn-ai').addEventListener('click', () => {
+    void doAiAnalyze();
   });
   $<HTMLButtonElement>('btn-teach').addEventListener('click', async () => {
     if (activeTabId === null) {

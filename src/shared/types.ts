@@ -92,6 +92,24 @@ export interface SiteIgnore {
   createdAt: number;
 }
 
+/** AI 建议（来源标注 ai、建议级，不自动填写；用户接受后才升级为 taught） */
+export type AiSuggestionStatus = 'pending' | 'accepted' | 'ignored';
+
+export interface AiSuggestion {
+  id: string;
+  kind: 'page-field';
+  /** 归一化后的页面文本（识别键） */
+  labelKey: string;
+  /** 展示用页面原文 */
+  pageText: string;
+  /** 建议映射到的键；为空时用 newFieldName 表示“建议新增字段” */
+  fieldKey: string | null;
+  newFieldName?: string;
+  conf: number;
+  createdAt: number;
+  status: AiSuggestionStatus;
+}
+
 /** 简历信息档案条目（M2）：单条字段值 */
 export interface ProfileEntry {
   fieldKey: FieldKey;

@@ -19,6 +19,17 @@ import {
 import { FIELD_DEFS, FIELD_GROUPS, fieldZh } from '../shared/taxonomy';
 import type { FieldKey } from '../shared/taxonomy';
 import { clearSessions, listSessions, sessionsToText } from '../shared/logger';
+import { loadSettings, saveSettings } from '../shared/storage';
+import { hasAiConfig, chatJson } from '../shared/aiProvider';
+import {
+  RESUME_SCALAR_FIELDS,
+  RESUME_SCALAR_KEYS,
+  buildResumeExtractSystem,
+  buildResumeExtractUser,
+  decideResumeAdditions,
+  parseResumeExtractJson,
+} from '../skills/resume-extract';
+import type { ResumeAiDecision } from '../skills/resume-extract';
 import { listIgnores, listUserWords, removeIgnore, removeWord, upsertWord } from '../shared/learning';
 import { experienceKindZh, isExperienceBlockKey, replaceCoarseFromBlocks } from '../shared/blocks';
 import { customKeyOfName, customNameOfKey, isCustomKey } from '../shared/keys';
@@ -606,6 +617,30 @@ function logSessionText(s: {
   return lines.join('\n');
 }
 
+// ---------- AI 简历补全 ----------
+
+/**
+ * 把规则解析遗漏的部分交给模型补齐（无 Key 配置时直接返回空，纯规则流程不受影响）。
+ * 返回的 decisions 只代表“建议”，由调用方以可编辑草稿进入预览，落副本前用户可改可删。
+ */
+async function aiSupplementFor(
+  text: string,
+  parsed: readonly { fieldKey: string; value: string }[],
+): Promise<{ decisions: ResumeAiDecision[]; dropped: number }> {
+  const settings = await loadSettings();
+  if (!hasAiConfig(settings)) return { decisions: [], dropped: 0 };
+  const raw = await chatJson(
+    settings,
+    {
+      system: buildResumeExtractSystem(RESUME_SCALAR_FIELDS),
+      user: buildResumeExtractUser(text, parsed),
+    },
+    90_000,
+  );
+  const additions = parseResumeExtractJson(raw, RESUME_SCALAR_KEYS);
+  return decideResumeAdditions(parsed, additions);
+}
+
 // ---------- 简历导入（解析后可编辑，再另存/合并） ----------
 
 function importStatusEl(): HTMLElement {
@@ -842,6 +877,104 @@ async function doImportMerge(): Promise<void> {
   closeImportPanel();
 }
 
+/** AI 设置页签顶部状态徽标：按当前输入框内容即时判定 */
+function renderAiChip(): void {
+  const el = $('ai-state');
+  const url = $<HTMLInputElement>('set-ai-url').value.trim();
+  const model = $<HTMLInputElement>('set-ai-model').value.trim();
+  const key = $<HTMLInputElement>('set-ai-key').value.trim();
+  const on = Boolean(url && model && key);
+  el.classList.toggle('on', on);
+  el.classList.toggle('off', !on);
+  el.textContent = on
+    ? `已启用：${model}（页面 AI 建议 + 简历 AI 补全；清空 Key 保存即退回内置算法）`
+    : '未启用 · 使用内置算法识别与解析，不发送任何内容';
+}
+
+/**
+ * 上传简历主流程：读取文本 → 规则解析 → 若已配置 AI 且存在遗漏行则自动补全（不弹确认，
+ * 结果以可编辑草稿并入预览）→ 打开预览。任何一步失败都退回规则结果，不阻塞导入。
+ */
+async function importResumeFile(file: File): Promise<void> {
+  setImportStatus('正在读取与解析…（PDF 可能需要几秒）');
+  $('import-name').textContent = `「${file.name}」`;
+  $('import-rows').textContent = '';
+  let text: string;
+  try {
+    text = await resumeFileToText(file);
+  } catch (e) {
+    setImportStatus(`读取失败：${e instanceof Error ? e.message : String(e)}`, true);
+    closeImportPanel();
+    return;
+  }
+  if (!text.trim()) {
+    setImportStatus('未能从文件中提取到文本（可能是扫描版 PDF，需要 OCR 或手动填写）', true);
+    return;
+  }
+
+  const result = parseResumeText(text);
+  const settings = await loadSettings();
+  const aiOn = hasAiConfig(settings);
+  const needAi =
+    aiOn &&
+    (result.unmatched.length > 0 ||
+      (result.entries.length === 0 && result.blocks.length === 0));
+
+  let decisions: ResumeAiDecision[] = [];
+  let aiDropped = 0;
+  let aiNote = '';
+  if (needAi) {
+    setImportStatus('规则解析完成，AI 补全中…（会发送遗漏片段与简历上下文给模型）');
+    try {
+      const out = await aiSupplementFor(text, result.entries);
+      decisions = out.decisions;
+      aiDropped = out.dropped;
+    } catch (e) {
+      aiNote = `AI 补全失败：${e instanceof Error ? e.message : String(e)}（已退回规则结果）`;
+    }
+  } else if (aiOn) {
+    aiNote = '规则解析无遗漏行，未调用 AI。';
+  }
+
+  openImportPanel({ name: file.name, unmatched: result.unmatched }, result.entries, result.blocks);
+
+  if (decisions.length > 0) {
+    const added = decisions.filter((d) => d.kind === 'added');
+    const overridden = decisions.filter((d) => d.kind === 'overridden');
+    for (const d of overridden) {
+      const row = importBuffer.find((r) => r.fieldKey === d.key);
+      if (row) row.value = d.value;
+    }
+    for (const d of added) importBuffer.push({ fieldKey: d.key as FieldKey, value: d.value });
+    renderImportRows();
+    if (importBuffer.length === 0 && result.blocks.length === 0) {
+      setImportStatus('规则与 AI 都未解析出可用内容。可改用 .txt/.docx，或点「添加字段」手工整理。', true);
+      return;
+    }
+    setImportStatus(
+      `规则解析 ${result.entries.length} 项 + AI 补全 ${decisions.length} 项（新增 ${added.length}，修正 ${overridden.length}${
+        aiDropped ? `，低把握忽略 ${aiDropped} 项` : ''
+      }）——均为可编辑草稿，确认后再另存/合并${aiNote ? ` ｜ ${aiNote}` : ''}`,
+    );
+    return;
+  }
+
+  if (result.entries.length === 0 && result.blocks.length === 0) {
+    setImportStatus('未解析出可用内容。可改用 .txt/.docx，或点「添加字段」手工整理。', true);
+    return;
+  }
+  if (aiNote) {
+    const warn =
+      result.unmatched.length > 0
+        ? ` ｜ 另有 ${result.unmatched.length} 行未能自动归类，例如：${result.unmatched
+            .slice(0, 3)
+            .map((l) => `“${l.slice(0, 18)}”`)
+            .join('、')}`
+        : '';
+    setImportStatus(`规则解析 ${result.entries.length} 项${warn}${aiNote ? ` ｜ ${aiNote}` : ''}`);
+  }
+}
+
 // ---------- 启动 ----------
 
 async function main(): Promise<void> {
@@ -890,30 +1023,7 @@ async function main(): Promise<void> {
     const file = fileInput.files?.[0];
     fileInput.value = '';
     if (!file) return;
-    setImportStatus('正在读取与解析…（PDF 可能需要几秒）');
-    $('import-name').textContent = `「${file.name}」`;
-    $('import-rows').textContent = '';
-    try {
-      const text = await resumeFileToText(file);
-      if (!text.trim()) {
-        setImportStatus('未能从文件中提取到文本（可能是扫描版 PDF，需要 OCR 或手动填写）', true);
-        return;
-      }
-      const result = parseResumeText(text);
-      if (result.entries.length === 0 && result.blocks.length === 0) {
-        setImportStatus('未解析出可用内容。可改用 .txt/.docx，或点下方「添加字段」手工整理。', true);
-        openImportPanel({ name: file.name, unmatched: result.unmatched }, [], []);
-        return;
-      }
-      openImportPanel(
-        { name: file.name, unmatched: result.unmatched },
-        result.entries,
-        result.blocks,
-      );
-    } catch (e) {
-      setImportStatus(`解析失败：${e instanceof Error ? e.message : String(e)}`, true);
-      closeImportPanel();
-    }
+    await importResumeFile(file);
   });
 
   await renderTaxonomyPreview();
@@ -930,6 +1040,54 @@ async function main(): Promise<void> {
     await renderWordsManager();
     await refreshStats();
   });
+
+  // —— AI 设置 ——
+  const setStatus = $<HTMLSpanElement>('set-status');
+  const loadAiSettings = async (): Promise<void> => {
+    const s = await loadSettings();
+    $<HTMLInputElement>('set-ai-url').value = s.aiBaseUrl;
+    $<HTMLInputElement>('set-ai-model').value = s.aiModel;
+    $<HTMLInputElement>('set-ai-key').value = s.aiApiKey;
+  };
+  await loadAiSettings();
+  renderAiChip();
+  $('btn-set-save').addEventListener('click', async () => {
+    await saveSettings({
+      aiBaseUrl: $<HTMLInputElement>('set-ai-url').value.trim(),
+      aiModel: $<HTMLInputElement>('set-ai-model').value.trim(),
+      aiApiKey: $<HTMLInputElement>('set-ai-key').value.trim(),
+    });
+    renderAiChip();
+    setStatus.textContent = `已保存 ${fmtTs(Date.now())}`;
+    setStatus.style.color = '#15803d';
+  });
+  $('btn-set-test').addEventListener('click', async () => {
+    await saveSettings({
+      aiBaseUrl: $<HTMLInputElement>('set-ai-url').value.trim(),
+      aiModel: $<HTMLInputElement>('set-ai-model').value.trim(),
+      aiApiKey: $<HTMLInputElement>('set-ai-key').value.trim(),
+    });
+    renderAiChip();
+    setStatus.textContent = '正在测试…';
+    setStatus.style.color = '#64748b';
+    try {
+      const resp = (await chrome.runtime.sendMessage({ type: 'AI_TEST' })) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (resp?.ok) {
+        setStatus.textContent = '连接成功 ✅';
+        setStatus.style.color = '#15803d';
+      } else {
+        setStatus.textContent = `失败：${resp?.error ?? '无响应'}`;
+        setStatus.style.color = '#b91c1c';
+      }
+    } catch (e) {
+      setStatus.textContent = `失败：${e instanceof Error ? e.message : String(e)}`;
+      setStatus.style.color = '#b91c1c';
+    }
+  });
+
   await renderLogs();
 
   document.getElementById('btn-log-refresh')?.addEventListener('click', () => {

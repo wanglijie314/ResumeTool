@@ -1,5 +1,5 @@
 /** chrome.storage.local 的键与默认值（唯一事实来源） */
-import type { LogSession, ProfileCopy, SiteIgnore, WordMapping } from './types';
+import type { AiSuggestion, LogSession, ProfileCopy, SiteIgnore, WordMapping } from './types';
 
 export const STORAGE_KEYS = {
   settings: 'settings',
@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   siteIgnores: 'siteIgnores',
   profileCopies: 'profileCopies',
   logs: 'logSessions',
+  aiSuggestions: 'aiSuggestions',
 } as const;
 
 export interface Settings {
@@ -16,12 +17,19 @@ export interface Settings {
   panelAutoShow: boolean;
   /** 高敏感字段（身份证等）填写前需确认 */
   sensitiveConfirm: boolean;
+  /** AI 模型通道（智谱等兼容端点，请求 /chat/completions） */
+  aiBaseUrl: string;
+  aiModel: string;
+  aiApiKey: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   autoScan: true,
   panelAutoShow: true,
   sensitiveConfirm: true,
+  aiBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+  aiModel: '',
+  aiApiKey: '',
 };
 
 export interface StorageShape {
@@ -30,6 +38,7 @@ export interface StorageShape {
   [STORAGE_KEYS.siteIgnores]: SiteIgnore[];
   [STORAGE_KEYS.profileCopies]: ProfileCopy[];
   [STORAGE_KEYS.logs]: LogSession[];
+  [STORAGE_KEYS.aiSuggestions]: AiSuggestion[];
 }
 
 export const DEFAULT_STORAGE: StorageShape = {
@@ -38,6 +47,7 @@ export const DEFAULT_STORAGE: StorageShape = {
   [STORAGE_KEYS.siteIgnores]: [],
   [STORAGE_KEYS.profileCopies]: [],
   [STORAGE_KEYS.logs]: [],
+  [STORAGE_KEYS.aiSuggestions]: [],
 };
 
 export async function loadSettings(): Promise<Settings> {
@@ -47,6 +57,13 @@ export async function loadSettings(): Promise<Settings> {
     return { ...DEFAULT_SETTINGS, ...(raw as Settings) };
   }
   return { ...DEFAULT_SETTINGS };
+}
+
+export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
+  const cur = await loadSettings();
+  const next = { ...cur, ...patch };
+  await chrome.storage.local.set({ [STORAGE_KEYS.settings]: next });
+  return next;
 }
 
 /** 读取全局用户词表（教学 + 别名，共用一个表） */

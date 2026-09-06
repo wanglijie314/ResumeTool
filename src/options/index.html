@@ -19,6 +19,7 @@
         <button data-page="profile" class="active">我的档案</button>
         <button data-page="rules">学习规则 <em>M3</em></button>
         <button data-page="logs">运行日志</button>
+        <button data-page="settings">AI 设置</button>
         <button data-page="preview">字段体系</button>
         <button data-page="about">关于与隐私</button>
       </nav>
@@ -125,6 +126,43 @@
         <div id="logs-list" class="logs-list"></div>
       </section>
 
+      <section class="page" data-page="settings" style="display: none">
+        <h3>AI 设置 <span class="log-count" style="margin-left: 0">（可选 · 填写后识别/解析更准确）</span></h3>
+        <div id="ai-state" class="ai-state off">未启用 · 使用内置算法识别与解析</div>
+        <p class="log-hint">
+          填写 API Key 后，AI 会在两处增强：
+        </p>
+        <ul class="about" style="margin: 4px 0 12px">
+          <li><b>页面字段识别</b>：「扫描并填写」弹窗对未识别字段给出 AI 建议（仅发送控件的 标签/提示词/形态，不含你填写的值；接受后才生效并记住）。</li>
+          <li><b>简历解析</b>：上传简历时，规则解析遗漏/疑似错误的部分会自动交给 AI 补齐（会将该部分与简历上下文发送给你填写的模型服务商），结果以可编辑草稿进入预览。</li>
+        </ul>
+        <p class="log-hint">
+          <b>不填写 = 完全使用内置算法填写与解析</b>，不发送任何内容。接口需兼容
+          /chat/completions + JSON 输出（智谱即此格式）。API Key 只存本机。
+        </p>
+        <div class="set-row">
+          <label for="set-ai-url">接口地址</label>
+          <input id="set-ai-url" type="text" placeholder="https://open.bigmodel.cn/api/paas/v4" />
+        </div>
+        <div class="set-row">
+          <label for="set-ai-model">模型名</label>
+          <input id="set-ai-model" type="text" placeholder="如 glm-4.5-flash / glm-4.5-air（按智谱文档当下可用型号填写）" />
+        </div>
+        <div class="set-row">
+          <label for="set-ai-key">API Key</label>
+          <input id="set-ai-key" type="password" placeholder="sk-…" />
+        </div>
+        <div class="set-actions">
+          <button id="btn-set-save" class="save" type="button">保存设置</button>
+          <button id="btn-set-test" class="mini" type="button">测试连接</button>
+          <span id="set-status" class="log-hint"></span>
+        </div>
+        <p class="log-hint" style="margin-top: 10px">
+          建议先用智谱低成本档试跑；把 model 换成你想用的免费/低成本型号即可，无需改其它配置。
+          想完全关闭 AI，清空 API Key 保存即可。
+        </p>
+      </section>
+
       <section class="page" data-page="preview" style="display: none">
         <h3>字段体系（内置识别词典可覆盖的类型）</h3>
         <div id="taxonomy-groups" class="groups"></div>
@@ -133,10 +171,10 @@
       <section class="page" data-page="about" style="display: none">
         <h3>关于与隐私</h3>
         <ul class="about">
-          <li>所有数据（档案副本、学习规则、设置、日志）仅保存在本机浏览器的 chrome.storage.local，不会上传任何服务器。</li>
+          <li>所有数据（档案副本、学习规则、设置、日志）仅保存在本机浏览器的 chrome.storage.local。默认不会上传任何服务器。</li>
+          <li><b>仅当</b>你在「AI 设置」填写了 API Key：页面字段识别会发送控件的 标签/提示词/形态 给该模型服务商；上传简历时，规则解析遗漏/疑似错误的部分会连同简历上下文发送给该服务商。不填写 API Key 则不发送任何内容。</li>
           <li>敏感字段（如身份证号 🔒）填写前由你在弹窗中确认内容后才会写入页面。</li>
           <li>内容脚本只在你访问的页面内读取表单控件描述，不收集浏览历史。</li>
-          <li>当前里程碑：M0 骨架 ✅ · M1 扫描识别 ✅ · M2 多副本档案 + 弹窗填写 ✅（进行中）· M3 教学/询问待开发。</li>
         </ul>
       </section>
     </main>
