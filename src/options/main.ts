@@ -585,10 +585,11 @@ async function renderLogs(): Promise<void> {
     const sum = document.createElement('summary');
     const badge = document.createElement('span');
     badge.className = 'log-badge';
-    badge.textContent = s.source === 'content' ? '页面' : s.source === 'background' ? '后台' : '扩展';
+    badge.textContent =
+      s.source === 'content' ? '页面' : s.source === 'background' ? '后台' : s.source === 'ai' ? 'AI' : '扩展';
     const meta = document.createElement('span');
     meta.className = 'log-meta';
-    meta.textContent = `${fmtTs(s.startedAt)} · ${s.events.length} 条${s.url ? ' · ' + s.url : ''}`;
+    meta.textContent = `${fmtTs(s.startedAt)} · ${s.events.length} 条${s.source === 'ai' && s.title ? ' · ' + s.title : ''}${s.url ? ' · ' + s.url : ''}`;
     sum.appendChild(badge);
     sum.appendChild(meta);
     const pre = document.createElement('pre');
@@ -636,6 +637,7 @@ async function aiSupplementFor(
       user: buildResumeExtractUser(text, parsed),
     },
     90_000,
+    '简历解析补全(resume-extract)',
   );
   const additions = parseResumeExtractJson(raw, RESUME_SCALAR_KEYS);
   return decideResumeAdditions(parsed, additions);

@@ -255,7 +255,7 @@ export interface LogEvent {
 export interface LogSession {
   /** 形如 content-1725000000000 */
   id: string;
-  source: 'content' | 'background' | 'options';
+  source: 'content' | 'background' | 'options' | 'ai';
   startedAt: number;
   endAt?: number;
   url?: string;

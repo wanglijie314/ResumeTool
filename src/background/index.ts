@@ -64,7 +64,7 @@ async function aiPageMatch(fields: AiFieldIn[]): Promise<AiSuggestion[]> {
       customKeys,
     ),
     user: buildPageMatchUser(list),
-  });
+  }, 30_000, '页面字段识别(page-match)');
   const parsed = parsePageMatchJson(raw, list.length, allowed);
   const suggestions = parsed
     .filter((r) => r.action !== 'skip')
@@ -123,7 +123,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await chatJson(settings, {
           system: '你是连接测试助手。',
           user: '请只回复一个 JSON：{"ok": true}',
-        });
+        }, 30_000, '连接测试(AI_TEST)');
         sendResponse({ ok: true });
       } catch (e) {
         sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });

@@ -26,6 +26,7 @@
   - 通道 `shared/aiProvider`：/chat/completions + response_format=json_object（智谱默认端点、APIKey/模型可配、超时/网络/HTTP/解析错误分类）
   - `shared/aiSuggestions` 表 pending/accepted/ignored；popup「AI 识别 N 个…」建议列表，✓接受=upsertWord(taught)+自动重扫，✗忽略=仅标记；接受前零写入词表
   - options 新增「AI 设置」配置；manifest 增加 bigmodel.cn 域名权限；仅发控件 标签/提示词/形态，不含填写值
+  - 每次真实模型请求自动落本地日志：source=ai 会话（标题=用途，事件=发起/成功(HTTP+耗时)/失败(错误码+详情)，含模型/端点/提示词体量）——选项页「运行日志」可直接看到并导出，用于确认是否真的走了 AI 调用
 - M6 简历解析 AI 兜底 ✅（skill `resume-extract`）
   - 规则解析遗留行（unmatched）→ 自动 AI 补全：可用键=内置标量（剔除 6 类整段经历键与照片），严格校验/按值类型截断/同键留高 conf
   - 合并决策：规则已有键仅 conf≥0.9 才覆盖，否则丢弃；结果全部为可编辑草稿，另存/合并才落副本
