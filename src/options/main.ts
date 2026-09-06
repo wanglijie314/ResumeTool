@@ -675,7 +675,7 @@ async function aiSupplementFor(
         system: buildResumeExtractSystem(RESUME_SCALAR_FIELDS),
         user: buildResumeExtractUser(text, parsed),
       },
-      90_000,
+      180_000,
       '简历解析补全(resume-extract)',
       sessionId,
     );
@@ -976,16 +976,12 @@ async function importResumeFile(file: File): Promise<void> {
   const result = parseResumeText(text);
   const settings = await loadSettings();
   const aiOn = hasAiConfig(settings);
-  const needAi =
-    aiOn &&
-    (result.unmatched.length > 0 ||
-      (result.entries.length === 0 && result.blocks.length === 0));
 
   let decisions: ResumeAiDecision[] = [];
   let aiDropped = 0;
   let aiNote = '';
-  if (needAi) {
-    setImportStatus('规则解析完成，AI 补全中…（会发送遗漏片段与简历上下文给模型）');
+  if (aiOn) {
+    setImportStatus('规则解析完成，AI 补全中…（会发送简历片段与上下文给模型）');
     try {
       const out = await aiSupplementFor(text, result.entries, result.unmatched.length, file.name);
       decisions = out.decisions;
@@ -993,8 +989,6 @@ async function importResumeFile(file: File): Promise<void> {
     } catch (e) {
       aiNote = `AI 补全失败：${e instanceof Error ? e.message : String(e)}（已退回规则结果）`;
     }
-  } else if (aiOn) {
-    aiNote = '规则解析无遗漏行，未调用 AI。';
   }
 
   openImportPanel({ name: file.name, unmatched: result.unmatched }, result.entries, result.blocks);

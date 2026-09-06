@@ -37,7 +37,7 @@ const lastN = (s: string, n: number): string =>
 export async function chatJson(
   settings: Settings,
   msgs: ChatMessages,
-  timeoutMs = 30000,
+  timeoutMs = 120000,
   purpose = 'AI 调用',
   logIntoSession?: string,
 ): Promise<unknown> {

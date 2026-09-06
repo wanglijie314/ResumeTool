@@ -64,7 +64,7 @@ async function aiPageMatch(fields: AiFieldIn[]): Promise<AiSuggestion[]> {
       customKeys,
     ),
     user: buildPageMatchUser(list),
-  }, 30_000, '页面字段识别(page-match)');
+  }, 120_000, '页面字段识别(page-match)');
   const parsed = parsePageMatchJson(raw, list.length, allowed);
   const suggestions = parsed
     .filter((r) => r.action !== 'skip')
