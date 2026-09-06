@@ -18,7 +18,7 @@ import {
 } from '../shared/profile';
 import { FIELD_DEFS, FIELD_GROUPS, fieldZh } from '../shared/taxonomy';
 import type { FieldKey } from '../shared/taxonomy';
-import { clearSessions, listSessions, sessionsToText } from '../shared/logger';
+import { appendEvent, clearSessions, endSession, listSessions, sessionsToText, startSession } from '../shared/logger';
 import { loadSettings, saveSettings } from '../shared/storage';
 import { hasAiConfig, chatJson } from '../shared/aiProvider';
 import {
@@ -623,24 +623,83 @@ function logSessionText(s: {
 /**
  * 把规则解析遗漏的部分交给模型补齐（无 Key 配置时直接返回空，纯规则流程不受影响）。
  * 返回的 decisions 只代表“建议”，由调用方以可编辑草稿进入预览，落副本前用户可改可删。
+ *
+ * 全程打印流程日志（与通道内请求事件共用同一条 ai 会话，选项页「运行日志」可见）：
+ * 开始（文件名/遗漏行数/已解析字段数）→ 请求发起/成功或失败（通道内）→ 完成（新增/修正/忽略 + 耗时）。
  */
 async function aiSupplementFor(
   text: string,
   parsed: readonly { fieldKey: string; value: string }[],
+  unmatchedCount: number,
+  fileName: string,
 ): Promise<{ decisions: ResumeAiDecision[]; dropped: number }> {
   const settings = await loadSettings();
   if (!hasAiConfig(settings)) return { decisions: [], dropped: 0 };
-  const raw = await chatJson(
-    settings,
-    {
-      system: buildResumeExtractSystem(RESUME_SCALAR_FIELDS),
-      user: buildResumeExtractUser(text, parsed),
-    },
-    90_000,
-    '简历解析补全(resume-extract)',
-  );
-  const additions = parseResumeExtractJson(raw, RESUME_SCALAR_KEYS);
-  return decideResumeAdditions(parsed, additions);
+
+  let sessionId: string | undefined;
+  try {
+    sessionId = await startSession({
+      source: 'ai',
+      title: 'AI 调用：简历解析补全(resume-extract)',
+    });
+  } catch {
+    sessionId = undefined;
+  }
+  const app = async (level: 'info' | 'error', msg: string, data?: unknown): Promise<void> => {
+    if (!sessionId) return;
+    try {
+      await appendEvent(sessionId, level, msg, data);
+    } catch {
+      /* 日志失败不影响流程 */
+    }
+  };
+  const done = async (): Promise<void> => {
+    if (!sessionId) return;
+    try {
+      await endSession(sessionId);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const t0 = Date.now();
+  await app('info', `简历 AI 补全开始：${fileName}`, {
+    unmatchedCount,
+    parsedCount: parsed.length,
+    textChars: text.length,
+  });
+  try {
+    const raw = await chatJson(
+      settings,
+      {
+        system: buildResumeExtractSystem(RESUME_SCALAR_FIELDS),
+        user: buildResumeExtractUser(text, parsed),
+      },
+      90_000,
+      '简历解析补全(resume-extract)',
+      sessionId,
+    );
+    const additions = parseResumeExtractJson(raw, RESUME_SCALAR_KEYS);
+    const out = decideResumeAdditions(parsed, additions);
+    const added = out.decisions.filter((d) => d.kind === 'added').length;
+    const overridden = out.decisions.length - added;
+    await app(
+      'info',
+      `简历 AI 补全完成：新增 ${added} · 修正 ${overridden} · 低把握忽略 ${out.dropped}（耗时 ${Date.now() - t0}ms）`,
+      { added, overridden, dropped: out.dropped, ms: Date.now() - t0 },
+    );
+    await done();
+    return out;
+  } catch (e) {
+    const code =
+      e instanceof Error && 'code' in e ? ` (${String((e as { code?: string }).code ?? '')})` : '';
+    await app(
+      'error',
+      `简历 AI 补全失败${code}：${e instanceof Error ? e.message : String(e)}（已退回规则结果）`,
+    );
+    await done();
+    throw e;
+  }
 }
 
 // ---------- 简历导入（解析后可编辑，再另存/合并） ----------
@@ -928,7 +987,7 @@ async function importResumeFile(file: File): Promise<void> {
   if (needAi) {
     setImportStatus('规则解析完成，AI 补全中…（会发送遗漏片段与简历上下文给模型）');
     try {
-      const out = await aiSupplementFor(text, result.entries);
+      const out = await aiSupplementFor(text, result.entries, result.unmatched.length, file.name);
       decisions = out.decisions;
       aiDropped = out.dropped;
     } catch (e) {

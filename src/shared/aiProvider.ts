@@ -31,12 +31,15 @@ const lastN = (s: string, n: number): string =>
  * 调用 chat/completions 并返回解析后的 JSON（模型端开启 response_format=json_object）。
  * 兼容智谱等端点：body = { model, messages, temperature, response_format }。
  * purpose 仅用于日志会话标题（如“页面字段识别/简历解析补全”）。
+ * logIntoSession：可选，传入已建好的日志会话 id（调用方想把自己的语义事件与本次
+ * 请求事件放在同一条会话里时用）；不传则本函数自建并自收尾。
  */
 export async function chatJson(
   settings: Settings,
   msgs: ChatMessages,
   timeoutMs = 30000,
   purpose = 'AI 调用',
+  logIntoSession?: string,
 ): Promise<unknown> {
   if (!hasAiConfig(settings)) {
     throw new AiChannelError('config', '请先在「设置」里填写 AI 模型与 API Key');
@@ -46,7 +49,8 @@ export async function chatJson(
   const model = settings.aiModel.trim();
 
   // —— 本地运行日志：每次模型请求 = 一个会话（记录失败不影响调用本身）——
-  let sessionId: string | undefined;
+  let sessionId = logIntoSession;
+  const ownsSession = !sessionId;
   const started = Date.now();
   const log = async (level: 'info' | 'error', msg: string, data?: unknown): Promise<void> => {
     if (!sessionId) return;
@@ -57,20 +61,22 @@ export async function chatJson(
     }
   };
   const endLog = async (): Promise<void> => {
-    if (!sessionId) return;
+    if (!sessionId || !ownsSession) return;
     try {
       await endSession(sessionId);
     } catch {
       /* ignore */
     }
   };
-  try {
-    sessionId = await startSession({
-      source: 'ai',
-      title: `AI 调用：${purpose}`,
-    });
-  } catch {
-    sessionId = undefined;
+  if (ownsSession) {
+    try {
+      sessionId = await startSession({
+        source: 'ai',
+        title: `AI 调用：${purpose}`,
+      });
+    } catch {
+      sessionId = undefined;
+    }
   }
   await log('info', `AI 请求发起：${model}（用途：${purpose}）`, {
     url,
