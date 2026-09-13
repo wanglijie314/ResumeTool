@@ -8,7 +8,18 @@
 - 本地解析 `.pdf/.docx/.txt/.md` 简历 → 结构化字段预览、可编辑后再建副本或合并；
 - 内置运行日志（本地环形存储、自动清理）、学习词表与别名管理、自定义字段等，帮助持续收敛识别规则。
 
-当前进度：M0 骨架 ✅ · M1 扫描识别 ✅ · M2 多副本+弹窗填写 ✅ · M3 教学/自定义字段/词表 ✅ · M4 经历多行填写驱动 ✅（真实站点形态仍待广泛验证）
+当前进度：M0 骨架 ✅ · M1 扫描识别 ✅ · M2 多副本+弹窗填写 ✅ · M3 教学/自定义字段/词表 ✅ · M4 经历多行填写驱动 ✅（真实站点形态仍待广泛验证） · M5 AI 字段识别（建议级）✅ · M6 简历解析 AI 补全 ✅
+
+> 项目背景 / 遇到的问题 / 解决方案 / 最终结果 的完整叙述版见 `docs/PLUGIN_OVERVIEW.md`；会话接续信息见 `docs/PROJECT_STATE.md`。
+
+## AI 增强（可选，自带 Key）
+
+在管理页顶部「AI 设置」页签填接口地址 / 模型名 / API Key 即可开启，两处生效：
+
+- **页面字段识别**：弹窗对未识别字段给出 AI 建议（只发控件标签/提示词/形态，不含你填的值）；**接受**后才写入全局词表并自动重扫；
+- **简历解析补全**：上传简历时，规则解析遗漏/疑似错误的部分自动交给 AI 补齐，结果以可编辑草稿进入预览。
+
+每次真实模型请求都会记入「运行日志」（用途/模型/端点/耗时/错误码），可据此确认是否真的走了 AI。**不填 Key 则完全不调用、不发送任何数据**，全部使用内置算法；清空 Key 保存即关闭。
 
 ## 使用（M2 新增）
 
@@ -45,10 +56,14 @@ npm run build      # 产物输出到 dist/
 
 | 命令 | 作用 |
 |---|---|
-| `npm run build` | 构建到 `dist/` |
+| `npm run build` | 构建到 `dist/`（含 SW loader 修正后置脚本） |
 | `npm run typecheck` | TypeScript 类型检查 |
-| `npm run test:classify` | 分类器/词典逻辑测试（48 个断言，Node 直跑） |
-| `npm run check` | 类型检查 + 逻辑测试 + 构建 |
+| `npm run test:classify` | 分类器/词典逻辑测试（62 断言） |
+| `npm run test:keys` | 自定义键与文本相似度测试 |
+| `npm run test:rows` | 经历行角色探测测试 |
+| `npm run test:resume` | 简历解析 + DOCX 抽取测试 |
+| `npm run test:ai` | AI 契约解析测试（page-match 11 项 + resume-extract 26 项） |
+| `npm run check` | 类型检查 + 全部逻辑测试 + 构建 |
 | `npm run dev` | Vite dev（CRXJS 热更新，需配合 chrome 加载后自动重载） |
 
 调试：在目标页面控制台执行 `window.__jianliAutofillDebug`，可 `rescan()` / 查看原始候选 `raw()`。
@@ -58,12 +73,18 @@ npm run build      # 产物输出到 dist/
 ```
 manifest.json           MV3 清单
 vite.config.ts          CRXJS 构建配置
-src/shared/             taxonomy 字段体系、存储键、公共类型、文本归一化
-src/content/            scanner 扫描器 · dictionary 内置词典 · classifier 分类器
+src/shared/             taxonomy 字段体系、keys(custom:)、profile 副本、learning 词表、storage、
+                        logger、resumeParser/resumeFile、blocks 结构化经历、rowRoles、textMatch、
+                        aiProvider(AI 通道) · aiSuggestions(建议表)
+src/skills/             page-match（页面字段识别建议）· resume-extract（简历解析 AI 补全）
+src/content/            scanner 扫描器 · dictionary 内置词典 · classifier 分类器 · filler 填写 ·
+                        widgets 自定义下拉/日历 · teachOverlay 教学浮层 · rowFill 按段填经历 ·
                         panel 识别面板 · index 主循环（MutationObserver 跟随 SPA）
-src/background/         service worker（默认存储、消息通道）
-src/options/            管理页骨架（档案/学习规则/字段体系/关于）
-pages/demo.html         本地演示页（含"下一步"动态渲染场景）
+src/background/         service worker（默认存储、消息通道、AI_ANALYZE/AI_TEST）
+src/popup/              工具栏弹窗（扫描并填写 / 信息副本 / AI 识别 / 按段填经历）
+src/options/            完整管理页（我的档案 / 学习规则 / 运行日志 / AI 设置 / 字段体系 / 关于与隐私）
+docs/                   PROJECT_STATE.md 会话接续 · PLUGIN_OVERVIEW.md 项目介绍 · 简历解析示例
+pages/demo.html         本地演示页（含自定义下拉/日历/多行组合场景）
 public/icons/           扩展图标
 ```
 
@@ -76,13 +97,14 @@ public/icons/           扩展图标
 - 学习规则：本地已存规则优先于内置词典（M3 开始写入）；
 - 面板跟随：MutationObserver 监听 DOM/样式变化自动重扫，SPA 下一步新增字段会实时出现。
 
-## 已知边界（后续里程碑）
+## 已知边界（后续）
 
-- M2：档案存储与原生控件填写、敏感字段确认、防覆盖；
-- M3：站内询问浮层、词典自学习闭环、合并字段（如“四六级”合一输入）拆分处理；
-- M4：自定义下拉/日期弹层/动态多行（教育、项目“添加一行”）等复杂控件、iframe 内嵌表单；
+- **M4 真实站点适配**：经历行组合的 DOM 形态需按具体站点收敛；探测失败会明确提示"剩余未填"，绝不乱填；
+- **地域省市下拉通用驱动**：方案已定（省市拆分 + 可搜索下拉 + 级联），待开发；
+- **OCR**：扫描版 PDF 暂不支持，需 OCR 或手工填写；
+- **简历 AI 补全范围**：目前只补内置标量字段，"AI 新建自定义字段并落地导入预览"待做；
 - 登录墙、验证码（非表单验证码）不在工具自动化范围内，遇到由用户人工处理。
 
 ## 隐私
 
-所有数据只存本机 `chrome.storage.local`，不上传；高敏感字段（身份证）默认填写前需确认。
+所有数据只存本机 `chrome.storage.local`，默认不上传。仅在管理页「AI 设置」填写了 API Key 时才外发：页面字段识别发送**控件标签/提示词/形态**（不含填写值），简历补全发送**简历片段与上下文（≤2 万字）**给该模型服务商；不填 Key 则不发送任何内容。高敏感字段（身份证等）填写前需确认。
